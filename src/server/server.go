@@ -5,7 +5,7 @@
 //  it easier to start and stop the example. Each task has its own
 //  context and conceptually acts as a separate process.
 
-package main
+package efogIotEdgeHubServer
 
 import (
 	zmq "github.com/pebbe/zmq4"
@@ -16,6 +16,47 @@ import (
 	"sync"
 	"time"
 )
+
+const BackendBindDefaultEndpoint = "inproc://backend"
+const FrontendBindDefaultEndpoint = "tcp://*:5570"
+
+// Server instance structure which binds frontend with backend workers.
+type Server struct {
+	BackendBindEndpoint string
+	FrontendBindEndpoint string
+}
+
+// Instantiates a new Hub Server
+func NewServer( backendBindEndpoint *string, frontendBindEndpoint *string) *Server {
+	server := new(Server)
+	if frontendBindEndpoint != nil {
+		server.FrontendBindEndpoint = *frontendBindEndpoint
+	} else {
+		server.FrontendBindEndpoint = FrontendBindDefaultEndpoint
+	}
+	if(backendBindEndpoint != nil) {
+		server.BackendBindEndpoint = *backendBindEndpoint
+	} else {
+		server.BackendBindEndpoint = BackendBindDefaultEndpoint
+	}
+	return server
+}
+
+// Binds the frontend and backend endpoints with the proxy and telemetry counter module
+func (server *Server) Bind() {
+	frontend, _ := zmq.NewSocket(zmq.XSUB)
+	defer frontend.Close()
+	if frontend.Bind(server.FrontendBindEndpoint) != nil {
+		log.Fatalln("Failed to bind frontend")
+	}
+	backend, _ := zmq.NewSocket(zmq.XPUB)
+	defer backend.Close()
+	if backend.Bind(server.BackendBindEndpoint) != nil {
+		log.Fatalln("Failed to bind backend")
+	}
+	proxyErr := zmq.Proxy(frontend, backend, nil)
+	log.Fatalln("Proxy interrupted:", proxyErr)
+}
 
 //  ---------------------------------------------------------------------
 //  This is our client task
