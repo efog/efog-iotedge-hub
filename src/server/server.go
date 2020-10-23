@@ -10,170 +10,140 @@ package efogIotEdgeHubServer
 import (
 	zmq "github.com/pebbe/zmq4"
 
-	"fmt"
 	"log"
+	"fmt"
 	"math/rand"
-	"sync"
 	"time"
 )
 
-const BackendBindDefaultEndpoint = "inproc://backend"
+const BackendBindDefaultEndpoint = "tcp://*:5571"
+const BackendConnectDefaultEndpoint = "tcp://localhost:5571"
 const FrontendBindDefaultEndpoint = "tcp://*:5570"
+const FrontendConnectDefaultEndpoint = "tcp://localhost:5570"
 
 // Server instance structure which binds frontend with backend workers.
 type Server struct {
-	BackendBindEndpoint string
+	BackendBindEndpoint  string
+	BackendConnectEndpoint  string
 	FrontendBindEndpoint string
+	FrontendConnectEndpoint string
 }
 
 // Instantiates a new Hub Server
-func NewServer( backendBindEndpoint *string, frontendBindEndpoint *string) *Server {
+func NewServer(backendBindEndpoint *string, backendConnectEndpoint *string, frontendBindEndpoint *string, frontendConnectEndpoint *string) *Server {
 	server := new(Server)
+
+	if backendBindEndpoint != nil {
+		server.BackendBindEndpoint = *backendBindEndpoint
+	} else {
+		server.BackendBindEndpoint = BackendBindDefaultEndpoint
+	}
+	if backendConnectEndpoint != nil {
+		server.BackendConnectEndpoint = *backendConnectEndpoint
+	} else {
+		server.BackendConnectEndpoint = BackendConnectDefaultEndpoint
+	}
+
 	if frontendBindEndpoint != nil {
 		server.FrontendBindEndpoint = *frontendBindEndpoint
 	} else {
 		server.FrontendBindEndpoint = FrontendBindDefaultEndpoint
 	}
-	if(backendBindEndpoint != nil) {
-		server.BackendBindEndpoint = *backendBindEndpoint
+	if frontendConnectEndpoint != nil {
+		server.FrontendConnectEndpoint = *frontendConnectEndpoint
 	} else {
-		server.BackendBindEndpoint = BackendBindDefaultEndpoint
+		server.FrontendConnectEndpoint = FrontendConnectDefaultEndpoint
 	}
+
 	return server
 }
 
+func listener_thread() {
+	pipe, _ := zmq.NewSocket(zmq.PAIR)
+	pipe.Bind("inproc://pipe")
+
+	//  Print everything that arrives on pipe
+	for {
+		msg, err := pipe.RecvMessage(0)
+		if err != nil {
+			break //  Interrupted
+		}
+		log.Printf("received message %q", msg)
+	}
+}
+
+func subscriber_thread(endpoint *string) {
+	//  Subscribe to "A" and "B"
+	subscriber, _ := zmq.NewSocket(zmq.SUB)
+	subscriber.Connect(*endpoint)
+	subscriber.SetSubscribe("A")
+	subscriber.SetSubscribe("B")
+	defer subscriber.Close() // cancel subscribe
+
+	for count := 0; count < 5; count++ {
+		_, err := subscriber.RecvMessage(0)
+		if err != nil {
+			break //  Interrupted
+		}
+	}
+}
+
+func publisher_thread(endpoint *string) {
+	publisher, _ := zmq.NewSocket(zmq.PUB)
+	publisher.Bind(*endpoint)
+	for i := 0; i < 10; i++ {
+		s := fmt.Sprintf("%c-%05d", rand.Intn(10)+'A', rand.Intn(100000))
+		log.Printf("Sending %q", s)
+		_, err := publisher.SendMessage(s)
+		if err != nil {
+			break //  Interrupted
+		}
+		time.Sleep(100 * time.Millisecond) //  Wait for 1/10th second
+	}
+}
+
 // Binds the frontend and backend endpoints with the proxy and telemetry counter module
-func (server *Server) Bind() {
-	frontend, _ := zmq.NewSocket(zmq.XSUB)
-	defer frontend.Close()
-	if frontend.Bind(server.FrontendBindEndpoint) != nil {
-		log.Fatalln("Failed to bind frontend")
-	}
-	backend, _ := zmq.NewSocket(zmq.XPUB)
-	defer backend.Close()
-	if backend.Bind(server.BackendBindEndpoint) != nil {
-		log.Fatalln("Failed to bind backend")
-	}
-	proxyErr := zmq.Proxy(frontend, backend, nil)
-	log.Fatalln("Proxy interrupted:", proxyErr)
-}
+func (server *Server) Run() {
+	// Start the telemetry worker listening on the Pub/Sub
+	// telemetryWorker := NewTelemetryWorker()
+	// go telemetryWorker.Start()
 
-//  ---------------------------------------------------------------------
-//  This is our client task
-//  It connects to the server, and then sends a request once per second
-//  It collects responses as they arrive, and it prints them out. We will
-//  run several client tasks in parallel, each with a different random ID.
+	// time.Sleep(100 * time.Millisecond)
 
-func client_task() {
-	var mu sync.Mutex
+	// frontend, _ := zmq.NewSocket(zmq.XSUB)
+	// defer frontend.Close()
+	// feBindErr := frontend.Bind(server.FrontendBindEndpoint)
+	// if feBindErr != nil {
+	// 	log.Fatalf("Failed to bind frontend: %q", feBindErr)
+	// }
 
-	client, _ := zmq.NewSocket(zmq.DEALER)
-	defer client.Close()
+	// backend, _ := zmq.NewSocket(zmq.XPUB)
+	// defer backend.Close()
+	// beBindErr := backend.Connect(server.BackendBindEndpoint)
+	// if beBindErr != nil {
+	// 	log.Fatalf("Failed to bind backend: %q", beBindErr)
+	// }
 
-	//  Set random identity to make tracing easier
-	set_id(client)
-	client.Connect("tcp://localhost:5570")
+	// listener, _ := zmq.NewSocket(zmq.PAIR)
+	// defer listener.Close()
+	// listener.Connect("inproc://pipe")
+	// zmq.Proxy(frontend, backend, listener)
 
-	go func() {
-		for request_nbr := 1; true; request_nbr++ {
-			time.Sleep(time.Second)
-			mu.Lock()
-			client.SendMessage(fmt.Sprintf("request #%d", request_nbr))
-			mu.Unlock()
-		}
-	}()
+	go publisher_thread(&server.FrontendBindEndpoint)
+	go subscriber_thread(&server.BackendConnectEndpoint)
+	go listener_thread()
 
-	for {
-		time.Sleep(10 * time.Millisecond)
-		mu.Lock()
-		msg, err := client.RecvMessage(zmq.DONTWAIT)
-		if err == nil {
-			id, _ := client.GetIdentity()
-			fmt.Println(msg[0], id)
-		}
-		mu.Unlock()
-	}
-}
+	time.Sleep(100 * time.Millisecond)
 
-//  This is our server task.
-//  It uses the multithreaded server model to deal requests out to a pool
-//  of workers and route replies back to clients. One worker can handle
-//  one request at a time but one client can talk to multiple workers at
-//  once.
+	subscriber, _ := zmq.NewSocket(zmq.XSUB)
+	subscriber.Connect(server.FrontendConnectEndpoint)
 
-func server_task() {
+	publisher, _ := zmq.NewSocket(zmq.XPUB)
+	publisher.Bind(server.BackendBindEndpoint)
 
-	//  Frontend socket talks to clients over TCP
-	frontend, _ := zmq.NewSocket(zmq.ROUTER)
-	defer frontend.Close()
-	frontend.Bind("tcp://*:5570")
+	listener, _ := zmq.NewSocket(zmq.PAIR)
+	listener.Connect("inproc://pipe")
 
-	//  Backend socket talks to workers over inproc
-	backend, _ := zmq.NewSocket(zmq.DEALER)
-	defer backend.Close()
-	backend.Bind("inproc://backend")
+	zmq.Proxy(subscriber, publisher, listener)
 
-	//  Launch pool of worker threads, precise number is not critical
-	for i := 0; i < 5; i++ {
-		go server_worker()
-	}
-
-	//  Connect backend to frontend via a proxy
-	err := zmq.Proxy(frontend, backend, nil)
-	log.Fatalln("Proxy interrupted:", err)
-}
-
-//  Each worker task works on one request at a time and sends a random number
-//  of replies back, with random delays between replies:
-
-func server_worker() {
-
-	worker, _ := zmq.NewSocket(zmq.DEALER)
-	defer worker.Close()
-	worker.Connect("inproc://backend")
-
-	for {
-		//  The DEALER socket gives us the reply envelope and message
-		msg, _ := worker.RecvMessage(0)
-		identity, content := pop(msg)
-
-		//  Send 0..4 replies back
-		replies := rand.Intn(5)
-		for reply := 0; reply < replies; reply++ {
-			//  Sleep for some fraction of a second
-			time.Sleep(time.Duration(rand.Intn(1000)+1) * time.Millisecond)
-			worker.SendMessage(identity, content)
-		}
-	}
-}
-
-//  The main thread simply starts several clients, and a server, and then
-//  waits for the server to finish.
-
-func main() {
-	rand.Seed(time.Now().UnixNano())
-
-	go client_task()
-	go client_task()
-	go client_task()
-	go server_task()
-
-	//  Run for 5 seconds then quit
-	time.Sleep(5 * time.Second)
-}
-
-func set_id(soc *zmq.Socket) {
-	identity := fmt.Sprintf("%04X-%04X", rand.Intn(0x10000), rand.Intn(0x10000))
-	soc.SetIdentity(identity)
-}
-
-func pop(msg []string) (head, tail []string) {
-	if msg[1] == "" {
-		head = msg[:2]
-		tail = msg[2:]
-	} else {
-		head = msg[:1]
-		tail = msg[1:]
-	}
-	return
 }
