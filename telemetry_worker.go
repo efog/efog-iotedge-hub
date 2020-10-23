@@ -21,12 +21,12 @@ func (worker *TelemetryWorker) Start() {
 	pipe, _ := zmq.NewSocket(zmq.PAIR)
 	defer pipe.Close()
 	pipe.Bind("inproc://pipe")
+	//  Print everything that arrives on pipe
 	for {
 		msg, err := pipe.RecvMessage(0)
 		if err != nil {
-			log.Fatalf("err listening to pipe %q", err)
 			break //  Interrupted
 		}
-		log.Printf("%q\n", msg)
+		log.Printf("Listened %q", msg)
 	}
 }
