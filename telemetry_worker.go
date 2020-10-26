@@ -9,11 +9,13 @@ import (
 
 // TelemetryWorker Telemetry Worker structure
 type TelemetryWorker struct {
+	bindEndpoint *string
 }
 
 // NewTelemetryWorker Instantiates a new telemetry worker
-func NewTelemetryWorker() *TelemetryWorker {
+func NewTelemetryWorker(bindEndpoint string) *TelemetryWorker {
 	worker := new(TelemetryWorker)
+	worker.bindEndpoint = &bindEndpoint
 	return worker
 }
 
@@ -22,7 +24,7 @@ func (worker *TelemetryWorker) Start() {
 	var m sync.Mutex
 	pipe, _ := zmq.NewSocket(zmq.PAIR)
 	defer pipe.Close()
-	pipe.Bind("inproc://pipe")
+	pipe.Bind(*worker.bindEndpoint)
 	//  Print everything that arrives on pipe
 	for {
 		m.Lock()

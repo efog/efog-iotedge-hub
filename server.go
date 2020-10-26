@@ -21,6 +21,10 @@ const BackendConnectDefaultEndpoint = "tcp://localhost:5571"
 const FrontendBindDefaultEndpoint = "tcp://*:5570"
 // FrontendConnectDefaultEndpoint default value for frontend connect endpoint
 const FrontendConnectDefaultEndpoint = "tcp://localhost:5570"
+// ListenerConnectDefaultEndpoint default value for listener connect endpoint
+const ListenerConnectDefaultEndpoint = "tcp://localhost:5572"
+// ListenerBindDefaultEndpoint default value for listener connect endpoint
+const ListenerBindDefaultEndpoint = "tcp://*:5572"
 
 // Server instance structure which binds frontend with backend workers.
 type Server struct {
@@ -61,7 +65,7 @@ func NewServer(backendBindEndpoint *string, backendConnectEndpoint *string, fron
 
 // Run binds the frontend and backend endpoints with the proxy and telemetry counter module
 func (server *Server) Run() {
-	telemetryWorker := NewTelemetryWorker()
+	telemetryWorker := NewTelemetryWorker(ListenerBindDefaultEndpoint)
 	go telemetryWorker.Start()
 	time.Sleep(100 * time.Millisecond)
 	subscriber, _ := zmq.NewSocket(zmq.XSUB)
@@ -69,6 +73,6 @@ func (server *Server) Run() {
 	publisher, _ := zmq.NewSocket(zmq.XPUB)
 	publisher.Bind(server.BackendBindEndpoint)
 	listener, _ := zmq.NewSocket(zmq.PAIR)
-	listener.Connect("inproc://pipe")
+	listener.Connect(ListenerConnectDefaultEndpoint)
 	zmq.Proxy(subscriber, publisher, listener)
 }
