@@ -5,7 +5,7 @@
 //  it easier to start and stop the example. Each task has its own
 //  context and conceptually acts as a separate process.
 
-package efogIotEdgeHubServer
+package efogiotedgehub
 
 import (
 	zmq "github.com/pebbe/zmq4"
@@ -13,9 +13,13 @@ import (
 	"time"
 )
 
+// BackendBindDefaultEndpoint default value for backend bind endpoint
 const BackendBindDefaultEndpoint = "tcp://*:5571"
+// BackendConnectDefaultEndpoint default value for backend connect endpoint
 const BackendConnectDefaultEndpoint = "tcp://localhost:5571"
+// FrontendBindDefaultEndpoint default value for frontend bind endpoint
 const FrontendBindDefaultEndpoint = "tcp://*:5570"
+// FrontendConnectDefaultEndpoint default value for frontend connect endpoint
 const FrontendConnectDefaultEndpoint = "tcp://localhost:5570"
 
 // Server instance structure which binds frontend with backend workers.
@@ -26,7 +30,7 @@ type Server struct {
 	FrontendConnectEndpoint string
 }
 
-// Instantiates a new Hub Server
+// NewServer Instantiates a new Hub Server
 func NewServer(backendBindEndpoint *string, backendConnectEndpoint *string, frontendBindEndpoint *string, frontendConnectEndpoint *string) *Server {
 	server := new(Server)
 
@@ -55,7 +59,7 @@ func NewServer(backendBindEndpoint *string, backendConnectEndpoint *string, fron
 	return server
 }
 
-// Binds the frontend and backend endpoints with the proxy and telemetry counter module
+// Run binds the frontend and backend endpoints with the proxy and telemetry counter module
 func (server *Server) Run() {
 	telemetryWorker := NewTelemetryWorker()
 	go telemetryWorker.Start()

@@ -1,4 +1,4 @@
-package efogIotEdgeHubServer
+package efogiotedgehub
 
 import (
 	"fmt"
@@ -41,7 +41,7 @@ func TestServerInstantiationWithValues(t *testing.T) {
 	}
 }
 
-func test_subscriber_thread(endpoint *string) {
+func testSubscriberThread(endpoint *string) {
 	//  Subscribe to "A" and "B"
 	subscriber, _ := zmq.NewSocket(zmq.SUB)
 	subscriber.Connect(*endpoint)
@@ -58,7 +58,7 @@ func test_subscriber_thread(endpoint *string) {
 	}
 }
 
-func test_publisher_thread(endpoint *string) {
+func testPublisherThread(endpoint *string) {
 	publisher, _ := zmq.NewSocket(zmq.PUB)
 	publisher.Bind(*endpoint)
 	for i := 0; i < 10; i++ {
@@ -79,7 +79,7 @@ func TestServerCanRun(t *testing.T) {
 	wantBackEndConnect := "tcp://localhost:56789"
 	server := NewServer(&wantBackEndBind, &wantBackEndConnect, &wantFrontEndBind, &wantFrontEndConnect)
 	go server.Run()
-	go test_publisher_thread(&wantFrontEndBind)
-	go test_subscriber_thread(&wantBackEndConnect)
+	go testPublisherThread(&wantFrontEndBind)
+	go testSubscriberThread(&wantBackEndConnect)
 	time.Sleep(11000 * time.Millisecond)
 }
