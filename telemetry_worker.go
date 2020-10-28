@@ -32,7 +32,7 @@ func (worker *TelemetryWorker) Start() {
 		if err != nil {
 			break //  Interrupted
 		}
-		log.Printf("Listened %q", msg)
+		log.Printf("Listened %s", msg)
 		m.Unlock()
 	}
 }
