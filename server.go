@@ -22,9 +22,9 @@ const FrontendBindDefaultEndpoint = "tcp://*:5570"
 // FrontendConnectDefaultEndpoint default value for frontend connect endpoint
 const FrontendConnectDefaultEndpoint = "tcp://localhost:5570"
 // ListenerConnectDefaultEndpoint default value for listener connect endpoint
-const ListenerConnectDefaultEndpoint = "tcp://localhost:5572"
+const ListenerConnectDefaultEndpoint = "inproc://listener"
 // ListenerBindDefaultEndpoint default value for listener connect endpoint
-const ListenerBindDefaultEndpoint = "tcp://*:5572"
+const ListenerBindDefaultEndpoint = "inproc://listener"
 
 // Server instance structure which binds frontend with backend workers.
 type Server struct {
