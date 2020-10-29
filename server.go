@@ -74,5 +74,5 @@ func (server *Server) Run() {
 	publisher.Bind(server.BackendBindEndpoint)
 	listener, _ := zmq.NewSocket(zmq.PAIR)
 	listener.Connect(ListenerConnectDefaultEndpoint)
-	zmq.Proxy(subscriber, publisher, listener)
+	zmq.Proxy(subscriber, publisher, nil)
 }
