@@ -50,7 +50,7 @@ func NewServer(subscriberEndpoint *string, publisherEndpoint *string) *Server {
 func (server *Server) Run() {
 
 	telemetryWorker := NewTelemetryWorker(ListenerConnectDefaultEndpoint)
-	telemetryWorker.Start()
+	go telemetryWorker.Start()
 
 	log.Print("Starting xsub server")
 	subscriber, _ := zmq.NewSocket(zmq.XSUB)
