@@ -8,56 +8,39 @@
 package efogiotedgehub
 
 import (
-	zmq "github.com/pebbe/zmq4"
+	"log"
 
-	"time"
+	zmq "github.com/pebbe/zmq4"
 )
 
-// BackendBindDefaultEndpoint default value for backend bind endpoint
-const BackendBindDefaultEndpoint = "tcp://*:5571"
-// BackendConnectDefaultEndpoint default value for backend connect endpoint
-const BackendConnectDefaultEndpoint = "tcp://localhost:5571"
-// FrontendBindDefaultEndpoint default value for frontend bind endpoint
-const FrontendBindDefaultEndpoint = "tcp://*:5570"
-// FrontendConnectDefaultEndpoint default value for frontend connect endpoint
-const FrontendConnectDefaultEndpoint = "tcp://localhost:5570"
+// SubscriberDefaultEndpoint default value for subscriber endpoint
+const SubscriberDefaultEndpoint = "tcp://*:5571"
+
+// PublisherDefaultEndpoint default value for publisher endpoint
+const PublisherDefaultEndpoint = "tcp://localhost:5571"
+
 // ListenerConnectDefaultEndpoint default value for listener connect endpoint
 const ListenerConnectDefaultEndpoint = "inproc://listener"
-// ListenerBindDefaultEndpoint default value for listener connect endpoint
-const ListenerBindDefaultEndpoint = "inproc://listener"
 
 // Server instance structure which binds frontend with backend workers.
 type Server struct {
-	BackendBindEndpoint     string
-	BackendConnectEndpoint  string
-	FrontendBindEndpoint    string
-	FrontendConnectEndpoint string
+	SubscriberEndpoint string
+	PublisherEndpoint  string
 }
 
 // NewServer Instantiates a new Hub Server
-func NewServer(backendBindEndpoint *string, backendConnectEndpoint *string, frontendBindEndpoint *string, frontendConnectEndpoint *string) *Server {
+func NewServer(subscriberEndpoint *string, publisherEndpoint *string) *Server {
 	server := new(Server)
 
-	if backendBindEndpoint != nil {
-		server.BackendBindEndpoint = *backendBindEndpoint
+	if subscriberEndpoint != nil {
+		server.SubscriberEndpoint = *subscriberEndpoint
 	} else {
-		server.BackendBindEndpoint = BackendBindDefaultEndpoint
+		server.SubscriberEndpoint = SubscriberDefaultEndpoint
 	}
-	if backendConnectEndpoint != nil {
-		server.BackendConnectEndpoint = *backendConnectEndpoint
+	if publisherEndpoint != nil {
+		server.PublisherEndpoint = *publisherEndpoint
 	} else {
-		server.BackendConnectEndpoint = BackendConnectDefaultEndpoint
-	}
-
-	if frontendBindEndpoint != nil {
-		server.FrontendBindEndpoint = *frontendBindEndpoint
-	} else {
-		server.FrontendBindEndpoint = FrontendBindDefaultEndpoint
-	}
-	if frontendConnectEndpoint != nil {
-		server.FrontendConnectEndpoint = *frontendConnectEndpoint
-	} else {
-		server.FrontendConnectEndpoint = FrontendConnectDefaultEndpoint
+		server.PublisherEndpoint = PublisherDefaultEndpoint
 	}
 
 	return server
@@ -65,14 +48,28 @@ func NewServer(backendBindEndpoint *string, backendConnectEndpoint *string, fron
 
 // Run binds the frontend and backend endpoints with the proxy and telemetry counter module
 func (server *Server) Run() {
-	telemetryWorker := NewTelemetryWorker(ListenerBindDefaultEndpoint)
-	go telemetryWorker.Start()
-	time.Sleep(100 * time.Millisecond)
+
+	telemetryWorker := NewTelemetryWorker(ListenerConnectDefaultEndpoint)
+	telemetryWorker.Start()
+
+	log.Print("Starting xsub server")
 	subscriber, _ := zmq.NewSocket(zmq.XSUB)
-	subscriber.Connect(server.FrontendConnectEndpoint)
+	defer subscriber.Close()
+	subscriber.Bind(server.SubscriberEndpoint)
+	log.Printf("Binded subscriber to endpoint %s", server.SubscriberEndpoint)
+
+	log.Print("Starting xpub server")
 	publisher, _ := zmq.NewSocket(zmq.XPUB)
-	publisher.Bind(server.BackendBindEndpoint)
+	defer publisher.Close()
+	publisher.Bind(server.PublisherEndpoint)
+	log.Printf("Binded publisher to endpoint %s", server.PublisherEndpoint)
+
+	log.Print("Starting paired listener")
 	listener, _ := zmq.NewSocket(zmq.PAIR)
-	listener.Connect(ListenerConnectDefaultEndpoint)
+	defer listener.Close()
+	listener.Connect("inproc://listener")
+	log.Print("Started paired listener")
+
+	log.Print("Starting up ZMQ Proxy")
 	zmq.Proxy(subscriber, publisher, listener)
 }
